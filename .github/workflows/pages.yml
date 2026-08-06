@@ -1,0 +1,85 @@
+# Publica el cliente web en GitHub Pages.
+#
+# Lo que se publica es solo el motor: ni la ROM ni nada extraído de ella entra
+# en el paquete (web/build-web.sh aborta si detecta lo contrario). Cada jugador
+# aporta la suya desde su propio navegador.
+#
+# Para activarlo: Settings > Pages > Source: GitHub Actions.
+
+name: Publicar cliente web
+
+on:
+  push:
+    branches: [main]
+    # Un cambio solo en el backend no necesita reconstruir 23 MB de wasm.
+    paths:
+      - 'web/**'
+      - 'gen1recomp/**'
+      - 'DramaticShapeVoxelMod/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+    inputs:
+      server:
+        description: 'Servidor por defecto del build (wss://...). Vacío = la página arranca sin conexión y espera ?server= en el enlace.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un despliegue a la vez, sin cancelar el que ya esté a medias.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Construir el cliente
+        run: |
+          if [ -n "${{ github.event.inputs.server }}" ]; then
+            web/build-web.sh --server "${{ github.event.inputs.server }}"
+          else
+            web/build-web.sh
+          fi
+
+      # GitHub Pages no sirve rutas desconocidas como la página principal, así
+      # que sin esto un enlace compartido con una ruta cualquiera da 404 en
+      # vez de abrir el juego.
+      - name: Copiar index.html como 404.html
+        run: cp web/dist/index.html web/dist/404.html
+
+      # .nojekyll: Jekyll ignora los ficheros que empiezan por guion bajo, y
+      # Emscripten genera alguno.
+      - name: Desactivar Jekyll
+        run: touch web/dist/.nojekyll
+
+      - name: Comprobar que no se publica nada derivado de la ROM
+        run: |
+          if find web/dist -iname '*.gb' -o -iname '*.gbc' -o -iname '*.sav' | grep -q .; then
+            echo "Hay una ROM en el paquete: no se publica." >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

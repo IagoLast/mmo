@@ -1,0 +1,13 @@
+{
+  "name": "pokemon-mmo-web",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Browser build of the gen1recomp MMO client (love.js / Emscripten)",
+  "scripts": {
+    "build": "./build-web.sh",
+    "serve": "./serve.py"
+  },
+  "dependencies": {
+    "love.js": "11.4.1"
+  }
+}

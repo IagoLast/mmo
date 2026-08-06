@@ -1,0 +1,7 @@
+# Bytecode from the authoring tools in tools/ and
+# assets/docs/buidling_to_voxel/ -- generated on whatever machine ran them.
+__pycache__/
+*.py[cod]
+
+# agent worktrees and local scratch
+.claude/

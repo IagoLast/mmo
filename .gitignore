@@ -1,0 +1,50 @@
+# Este repositorio es público. Todo lo derivado de un cartucho con copyright
+# queda fuera: la ROM que compila `pokered`, la que aporte el jugador, y las
+# cachés que `gen1recomp` extrae de ella. Las reglas se repiten a propósito
+# aunque los .gitignore de pokered/ y gen1recomp/ ya cubran parte: aquí no hay
+# submódulos, y una regla duplicada cuesta menos que una ROM publicada.
+
+# --- ROMs, partidas y datos extraídos ------------------------------------
+*.gb
+*.gbc
+*.gba
+*.sav
+*.sgm
+*.sn[0-9]
+*.sa[0-9]
+*.rtc
+gen1recomp/data/generated/
+gen1recomp/assets/generated/
+gen1recomp/save/
+
+# --- artefactos de compilación -------------------------------------------
+node_modules/
+backend/dist/
+web/dist/
+web/.stage/
+web/*.love
+*.love
+.venv/
+__pycache__/
+*.py[cod]
+
+# pokered compila en el propio árbol
+*.o
+*.map
+*.sym
+*.1bpp
+*.2bpp
+*.pic
+
+# --- lastre de upstream que este proyecto no compila -----------------------
+# gen1recomp/mobile/ trae el árbol completo de SDL2 y LuaJIT para Android e
+# iOS: 147 MB de los 185 MB del vendorizado, para plataformas que este MMO no
+# soporta (solo desktop y navegador). Sigue estando en el repo original de
+# gen1recomp si algún día hace falta.
+gen1recomp/mobile/
+
+# --- entorno --------------------------------------------------------------
+.DS_Store
+.env
+.env.local
+*.log

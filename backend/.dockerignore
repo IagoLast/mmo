@@ -1,0 +1,10 @@
+node_modules
+dist
+test
+jest.config.cjs
+Dockerfile
+.dockerignore
+*.md
+.env
+.env.*
+*.log

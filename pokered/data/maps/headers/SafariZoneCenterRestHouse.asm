@@ -1,0 +1,2 @@
+	map_header SafariZoneCenterRestHouse, SAFARI_ZONE_CENTER_REST_HOUSE, GATE
+	end_map_header
