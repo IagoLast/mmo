@@ -1102,6 +1102,13 @@
     // these --env pairs back into os.getenv (see src/core/WebEnv.lua), so the
     // browser and scripts/run-client.sh configure the game identically.
     var args = ["./game.love", "--env", "POKEPORT_IDENTITY=" + identity];
+    // The voxel mod's sun pass throws real cast shadows, but on the web build
+    // they read as broken on many devices -- the shadow map's depth pack is
+    // driver-dependent under Emscripten. POKEPORT_VOXEL_SUN=0 falls back to
+    // the flat decal shadows the mod ships as its own fallback, which look
+    // right everywhere. The ?env loop below appends after this, so a link
+    // can still opt back in with ?env=POKEPORT_VOXEL_SUN=1.
+    args.push("--env", "POKEPORT_VOXEL_SUN=0");
     if (server) {
       args.push("--env", "POKEPORT_MMO_ADDR=" + server.address);
       args.push("--env", "POKEPORT_MMO_DEFAULTS=1");
