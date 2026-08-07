@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# Levanta una partida y saca un enlace público que puedes pegar en un chat.
+# Spins up a game and produces a public link you can paste into a chat.
 #
 #   scripts/host-game.sh
 #
-# Hace tres cosas: construye y arranca el servidor en Docker, abre un túnel
-# público hacia él (cloudflared o ngrok, sin cuenta ni tarjeta), y compone la
-# URL final juntando ese túnel con la página del cliente. Ctrl-C lo cierra
-# todo.
+# It does three things: builds and starts the server in Docker, opens a public
+# tunnel to it (cloudflared or ngrok, no account or card needed), and composes
+# the final URL joining that tunnel with the client page. Ctrl-C shuts it all
+# down.
 #
-# El servidor solo coordina posiciones y combates: ni la ROM ni las partidas
-# salen del navegador de cada jugador.
+# The server only coordinates positions and battles: neither the ROM nor the
+# saves ever leave each player's browser.
 
 set -euo pipefail
 
@@ -24,13 +24,13 @@ TUNNEL_LOG="$(mktemp -t pokemon-mmo-tunnel)"
 
 usage() {
   cat <<'EOF'
-Uso: scripts/host-game.sh [opciones]
+Usage: scripts/host-game.sh [options]
 
-  --page URL     página del cliente a la que apuntar el enlace. Por defecto se
-                 deduce del remote de git (https://usuario.github.io/repo/).
-  --port PUERTO  puerto local del servidor (por defecto 8080)
-  --local        sin túnel: solo servidor local, para jugar en la misma red
-  -h, --help     esta ayuda
+  --page URL     client page the link should point at. Defaults to the one
+                 inferred from the git remote (https://user.github.io/repo/).
+  --port PORT    local server port (default 8080)
+  --local        no tunnel: local server only, to play on the same network
+  -h, --help     this help
 EOF
 }
 
@@ -41,14 +41,14 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift ;;
     --local) LOCAL_ONLY=1 ;;
     -h|--help) usage; exit 0 ;;
-    *) echo "opción desconocida: $1" >&2; usage >&2; exit 2 ;;
+    *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
 done
 
 cleanup() {
   echo
-  echo "==> cerrando"
+  echo "==> shutting down"
   [ -n "$TUNNEL_PID" ] && kill "$TUNNEL_PID" 2>/dev/null || true
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   rm -f "$TUNNEL_LOG"
@@ -56,27 +56,27 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 command -v docker >/dev/null 2>&1 || {
-  echo "Falta Docker. Instálalo desde https://docs.docker.com/get-docker/" >&2
+  echo "Docker is missing. Install it from https://docs.docker.com/get-docker/" >&2
   exit 2
 }
 docker info >/dev/null 2>&1 || {
-  echo "Docker está instalado pero no arrancado. Abre Docker Desktop y repite." >&2
+  echo "Docker is installed but not running. Open Docker Desktop and try again." >&2
   exit 2
 }
 
-# ---------------------------------------------------------------- servidor
-echo "==> construyendo la imagen del servidor"
+# ---------------------------------------------------------------- server
+echo "==> building the server image"
 docker build -q -t "$IMAGE" "$ROOT/backend" >/dev/null
 
-echo "==> arrancando el servidor en el puerto $PORT"
+echo "==> starting the server on port $PORT"
 docker run -d --rm --name "$CONTAINER" \
   -p "$PORT:8080" -p 7778:7778 \
   -e PORT=8080 \
   "$IMAGE" >/dev/null
 
-# El contenedor puede morir al arrancar (puerto ocupado, imagen rota). Sin esta
-# espera el script anunciaría una partida que no existe.
-echo -n "==> esperando a que responda"
+# The container can die on startup (busy port, broken image). Without this
+# wait the script would announce a game that doesn't exist.
+echo -n "==> waiting for it to respond"
 for _ in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     echo " ok"
@@ -84,7 +84,7 @@ for _ in $(seq 1 30); do
   fi
   if ! docker ps -q --filter "name=$CONTAINER" | grep -q .; then
     echo
-    echo "El servidor se ha caído nada más arrancar:" >&2
+    echo "The server died right after starting:" >&2
     docker logs "$CONTAINER" 2>&1 | tail -20 >&2
     exit 1
   fi
@@ -93,13 +93,13 @@ for _ in $(seq 1 30); do
 done
 curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 || {
   echo
-  echo "El servidor no responde en http://127.0.0.1:$PORT/health" >&2
+  echo "The server is not responding on http://127.0.0.1:$PORT/health" >&2
   exit 1
 }
 
-# ---------------------------------------------------------------- página
-# Con el repo en GitHub, la página del cliente está en Pages y su URL se
-# deduce del remote. Es una suposición, no un hecho: --page la sobreescribe.
+# ---------------------------------------------------------------- page
+# With the repo on GitHub, the client page lives on Pages and its URL is
+# inferred from the remote. It's an assumption, not a fact: --page overrides it.
 if [ -z "$PAGE" ]; then
   REMOTE="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
   if [[ "$REMOTE" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
@@ -107,22 +107,22 @@ if [ -z "$PAGE" ]; then
   fi
 fi
 
-# ---------------------------------------------------------------- túnel
-if [ "$LOCAL_ONLY" = "1" ]; then
+# ---------------------------------------------------------------- tunnel
+if [ "$LOCAL_ONLY" = 1 ]; then
   echo
-  echo "  Servidor local:  ws://$(ipconfig getifaddr en0 2>/dev/null || hostname):$PORT/ws"
-  echo "  Pégalo en el campo \"servidor\" del cliente. Solo funciona en tu red."
+  echo "  Local server:  ws://$(ipconfig getifaddr en0 2>/dev/null || hostname):$PORT/ws"
+  echo "  Paste it into the client's \"server\" field. Only works on your network."
   echo
-  echo "Ctrl-C para parar."
-  # `wait` sin trabajos en segundo plano vuelve de inmediato; este sleep es lo
-  # que mantiene vivo el contenedor hasta que el usuario corte.
+  echo "Ctrl-C to stop."
+  # `wait` with no background jobs returns immediately; this sleep is what
+  # keeps the container alive until the user cuts it.
   while docker ps -q --filter "name=$CONTAINER" | grep -q .; do sleep 5; done
   exit 0
 fi
 
 PUBLIC=""
 if command -v cloudflared >/dev/null 2>&1; then
-  echo "==> abriendo túnel con cloudflared"
+  echo "==> opening a cloudflared tunnel"
   cloudflared tunnel --url "http://127.0.0.1:$PORT" --no-autoupdate >"$TUNNEL_LOG" 2>&1 &
   TUNNEL_PID=$!
   for _ in $(seq 1 30); do
@@ -132,11 +132,11 @@ if command -v cloudflared >/dev/null 2>&1; then
     sleep 1
   done
 elif command -v ngrok >/dev/null 2>&1; then
-  echo "==> abriendo túnel con ngrok"
+  echo "==> opening an ngrok tunnel"
   ngrok http "$PORT" --log stdout >"$TUNNEL_LOG" 2>&1 &
   TUNNEL_PID=$!
-  # La API local de ngrok es más fiable que rascar su log, que cambia de
-  # formato entre versiones.
+  # ngrok's local API is more reliable than scraping its log, which changes
+  # format between versions.
   for _ in $(seq 1 30); do
     PUBLIC="$(curl -fsS http://127.0.0.1:4040/api/tunnels 2>/dev/null \
       | grep -Eo 'https://[a-z0-9.-]+\.ngrok[a-z.-]*\.(app|io)' | head -1 || true)"
@@ -147,21 +147,21 @@ elif command -v ngrok >/dev/null 2>&1; then
 else
   cat >&2 <<EOF
 
-No hay ningún túnel instalado. Con uno de los dos basta:
+No tunnel is installed. Either one of these is enough:
 
   macOS:  brew install cloudflared
   Linux:  https://github.com/cloudflare/cloudflared/releases
 
-cloudflared no pide cuenta ni tarjeta. Si prefieres ngrok, instálalo y este
-script lo usará igual.
+cloudflared needs no account or card. If you prefer ngrok, install it and this
+script will use it just the same.
 
-Mientras tanto puedes jugar en tu red local con:  scripts/host-game.sh --local
+In the meantime you can play on your local network with:  scripts/host-game.sh --local
 EOF
   exit 2
 fi
 
 if [ -z "$PUBLIC" ]; then
-  echo "No se pudo abrir el túnel. Últimas líneas:" >&2
+  echo "The tunnel could not be opened. Last lines:" >&2
   tail -20 "$TUNNEL_LOG" >&2
   exit 1
 fi
@@ -170,25 +170,25 @@ WSS="wss://${PUBLIC#https://}/ws"
 
 echo
 echo "  ┌──────────────────────────────────────────────────────────────"
-echo "  │  Partida abierta"
+echo "  │  Game open"
 echo "  │"
 if [ -n "$PAGE" ]; then
-  echo "  │  Comparte este enlace:"
+  echo "  │  Share this link:"
   echo "  │  ${PAGE%/}/?server=$WSS"
 else
-  echo "  │  Servidor:  $WSS"
-  echo "  │  Pásalo a tus amigos con la página del cliente:"
-  echo "  │  <tu-pagina>/?server=$WSS"
+  echo "  │  Server:  $WSS"
+  echo "  │  Pass it to your friends with the client page:"
+  echo "  │  <your-page>/?server=$WSS"
 fi
 echo "  │"
-echo "  │  Cada jugador necesita su propia ROM; nadie la sube a ningún"
-echo "  │  sitio. Ctrl-C aquí cierra la partida para todos."
+echo "  │  Each player needs their own ROM; nobody uploads it anywhere."
+echo "  │  Ctrl-C here closes the game for everyone."
 echo "  └──────────────────────────────────────────────────────────────"
 echo
 
-# Si el túnel o el contenedor se caen, el enlace ya no vale: mejor terminar y
-# que se note, que quedarse anunciando una partida muerta.
+# If the tunnel or the container dies, the link is no longer valid: better to
+# end and make it noticed than to keep announcing a dead game.
 while kill -0 "$TUNNEL_PID" 2>/dev/null && docker ps -q --filter "name=$CONTAINER" | grep -q .; do
   sleep 5
 done
-echo "La partida se ha cerrado (el túnel o el servidor han terminado)." >&2
+echo "The game has closed (the tunnel or the server ended)." >&2
