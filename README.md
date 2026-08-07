@@ -20,47 +20,59 @@ only relays positions and battle turns.
 
 ---
 
-## Host a game in 5 minutes
-
-You need two pieces, both free: a **page** (static, on GitHub Pages) and a
-**server** (a small process, on your laptop or wherever you want).
-
-### 1. Publish the page
-
-Fork this repository and under **Settings → Pages** choose
-`Source: GitHub Actions`. On the next push, your client lives at:
-
-```
-https://YOUR-USERNAME.github.io/pokemon-mmo/
-```
-
-You can also trigger it manually from **Actions → Publish web client → Run
-workflow**. It takes a few minutes: it's the entire engine compiled to
-WebAssembly.
-
-### 2. Open the game
+## Play in one command
 
 ```bash
-scripts/host-game.sh
+git clone git@github.com:IagoLast/mmo.git
+cd mmo
+make play
 ```
 
-It starts the server in Docker, opens a public tunnel, and prints the link:
+That's it. `make play` does everything:
+
+1. Installs what's missing (`cloudflared`, `rgbds`, npm deps) via Homebrew.
+2. Builds the ROM from [`pret/pokered`](https://github.com/pret/pokered) (it's
+   not in the repo — it's a copyrighted cart, so the `.gitignore` blocks it).
+3. Builds the WebAssembly client **with the 3D voxel mode**.
+4. Starts the coordinator server.
+5. Opens a public `trycloudflare.com` tunnel and prints a link:
 
 ```
-  ┌──────────────────────────────────────────────────────────────
-  │  Game open
+  ┌──────────────────────────────────────────────────────────────────
+  │  Partida lista
   │
-  │  Share this link:
-  │  https://your-username.github.io/pokemon-mmo/?server=wss://something.trycloudflare.com/ws
-  └──────────────────────────────────────────────────────────────
+  │  Comparte este enlace (pagina + ROM + servidor, todo en uno):
+  │  https://xxxx.trycloudflare.com/?server=wss://xxxx.trycloudflare.com/ws
+  │
+  │  Ctrl-C cierra la partida para todos.
+  └──────────────────────────────────────────────────────────────────
 ```
 
-### 3. Share the link
+Share that link. Whoever opens it loads the page, the ROM, and the server
+connection in one go — no file picker, no setup on their side. **Ctrl-C**
+closes the game for everyone.
 
-Whoever opens it picks their ROM, their team, and joins. **Ctrl-C** closes the
-game. You need [Docker](https://docs.docker.com/get-docker/) and a tunnel
-(`brew install cloudflared`; no account or card required). To play only on your
-local network, `scripts/host-game.sh --local` skips the tunnel.
+### Variants
+
+```bash
+make play-local    # same, but only on your LAN — no public tunnel
+make rebuild        # rebuild the web client (e.g. after changing the mod)
+```
+
+### Requirements
+
+`make play` auto-installs `cloudflared` and `rgbds` via `brew` if they're
+missing, and `npm install` for both `backend/` and `web/`. You need:
+
+- **macOS** (the bootstrap uses `brew` and `ipconfig`). Linux works too if you
+  install `cloudflared`, `rgbds`, `node ≥ 22`, `python3`, and `zip` yourself.
+- **Node.js ≥ 22** — `brew install node`.
+
+> ⚠️ **The tunnel serves the ROM to anyone who reaches it.** `make play` is for
+> a private session with friends: the `trycloudflare.com` URL is public while
+> the tunnel is up, so don't leave it open unattended. For the copyright-safe
+> model (each player brings their own ROM, none is served), see
+> [GitHub Pages](#publish-the-client-on-github-pages) below.
 
 ---
 
@@ -76,9 +88,45 @@ brew install rgbds     # macOS
 make -C pokered red    # leaves pokered/pokered.gbc
 ```
 
-The `.gitignore` blocks `*.gb`, `*.gbc`, `*.sav`, and extracted data; the
-client build aborts if it detects any of them in the bundle, and the workflow
-checks again before publishing.
+`make play` does this for you on first run. The `.gitignore` blocks `*.gb`,
+`*.gbc`, `*.sav`, and extracted data; the client build aborts if it detects any
+of them in the bundle, and the Pages workflow checks again before publishing.
+
+---
+
+## Publish the client on GitHub Pages
+
+`make play` runs the client from your laptop. For a permanent, copyright-safe
+setup (no ROM served, players supply their own), publish the client on GitHub
+Pages and point it at a server you run separately.
+
+Fork this repository and under **Settings → Pages** choose
+`Source: GitHub Actions`. On the next push, your client lives at:
+
+```
+https://YOUR-USERNAME.github.io/pokemon-mmo/
+```
+
+You can also trigger it manually from **Actions → Publish web client → Run
+workflow**. It takes a few minutes: it's the entire engine compiled to
+WebAssembly.
+
+Then run only the server and hand out a link:
+
+```bash
+scripts/host-game.sh
+```
+
+It starts the server in Docker, opens a public tunnel, and prints:
+
+```
+  https://your-username.github.io/pokemon-mmo/?server=wss://something.trycloudflare.com/ws
+```
+
+Here the page is on Pages and the ROM is **not** served — each player loads
+their own from their browser. You need [Docker](https://docs.docker.com/get-docker/)
+and `brew install cloudflared`. To play only on your local network,
+`scripts/host-game.sh --local` skips the tunnel.
 
 ---
 
@@ -117,7 +165,7 @@ build → whatever the player types by hand.
 ### Setup
 
 ```bash
-./scripts/setup-mvp.sh                        # builds the ROM and prepares everything
+make setup                                # builds the ROM and prepares everything
 ./scripts/setup-mvp.sh "/path/to/your/Red.gb"  # or start from your own ROM
 ```
 
@@ -148,9 +196,9 @@ Details in [`web/README.md`](web/README.md).
 | | |
 |---|---|
 | Desktop (TCP) | `127.0.0.1:7778` |
-| Health HTTP | `http://127.0.0.1:3100/health` |
-| WebSocket in development | `ws://127.0.0.1:7779` (own port, via `WS_PORT`) |
-| WebSocket in production | `/ws` over the HTTP port |
+| Health HTTP | `http://127.0.0.1:3000/health` |
+| WebSocket (dev) | `ws://127.0.0.1:7779` (own port, via `WS_PORT`) |
+| WebSocket (prod) | `/ws` over the HTTP port |
 
 The coordinator and protocol are shared between TCP and WebSocket. In
 development the WebSocket also opens its own port because `web/serve.py` acts
@@ -160,10 +208,7 @@ only thing a PaaS or a tunnel can reach.
 ### Tests
 
 ```bash
-(cd backend && npm test && npm run build)
-(cd gen1recomp && luajit tests/mmo_world_client_test.lua)
-(cd gen1recomp && luajit tests/mmo_battle_flow_test.lua)
-(cd gen1recomp && luajit tests/run_engine.lua)   # full engine suite
+make test
 ```
 
 ---
@@ -177,6 +222,7 @@ only thing a PaaS or a tunnel can reach.
 | `pokered/` | the Pokémon Red disassembly ([pret/pokered](https://github.com/pret/pokered)), for building the ROM |
 | `backend/` | the game coordinator (NestJS): positions, challenges, and battle relay |
 | `web/` | the WebAssembly client packaging and the bootstrap page |
+| `Makefile` / `scripts/` | the `make play` entry point and the launch tooling |
 
 The first three are copies with our own changes, not submodules: the MMO layer
 and the browser fixes live inside them. Each keeps its original license.
