@@ -1283,6 +1283,7 @@
       }
     }, false);
 
+    reportWebGL();
     log("[web] arrancando LOVE — identidad " + identity);
     // The team is fetched HERE, not at page load: it is only known once Play
     // is pressed, and downloading five saves nobody asked for would be waste.
@@ -1302,6 +1303,64 @@
       log("[web] fallo al cargar el motor: " + err, true);
       logBox.classList.add("on");
     });
+  }
+
+  // ------------------------------------------------------------------ webgl
+  //
+  // love.js reaches the GPU through Emscripten's EGL shim, and that shim has a
+  // single failure vocabulary: when canvas.getContext("webgl") returns null,
+  // eglCreateContext reports EGL_BAD_CONFIG and LOVE prints "requires a
+  // graphics card and video drivers which support OpenGL 2.1 or OpenGL ES 2".
+  // On a phone that message is a red herring -- the GPU is fine, the browser
+  // simply did not hand over a context. These two probes recover the real
+  // reason and put it in the log the player can already open.
+  //
+  //   webglcontextcreationerror fires on the very canvas the engine will use
+  //   and carries the browser's own explanation in statusMessage. Emscripten
+  //   never listens for it, so without this the string is lost.
+  //
+  //   probeWebGL() asks a throwaway canvas the same question BEFORE the ~5 MB
+  //   wasm downloads, so a browser with no WebGL at all (an in-app WebView,
+  //   hardware acceleration off) says so in one line instead of after the
+  //   download. The probe context is handed back through WEBGL_lose_context:
+  //   a browser keeps only a handful alive at once, Android being the
+  //   stingiest, and leaking this one could itself be what makes the engine's
+  //   request fail.
+  function probeWebGL() {
+    var probe = document.createElement("canvas");
+    var gl = null;
+    try {
+      gl = probe.getContext("webgl", { alpha: false, depth: false, stencil: false, antialias: false });
+    } catch (e) {
+      return { ok: false, reason: String(e) };
+    }
+    if (!gl) return { ok: false, reason: null };
+    var info = gl.getExtension("WEBGL_debug_renderer_info");
+    var renderer = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    var lose = gl.getExtension("WEBGL_lose_context");
+    if (lose) lose.loseContext();
+    return { ok: true, renderer: String(renderer) };
+  }
+
+  // Logged, never fatal: the probe runs on a different canvas than the engine,
+  // so treating a negative as a hard stop would strand a player whose browser
+  // only refused the throwaway. The engine tries anyway and its own failure,
+  // if it comes, now arrives with the browser's reason next to it.
+  function reportWebGL() {
+    $("canvas").addEventListener("webglcontextcreationerror", function (e) {
+      log("[webgl] el navegador rechazó el contexto: "
+        + (e.statusMessage || "sin motivo"), true);
+    }, false);
+    var gpu = probeWebGL();
+    if (gpu.ok) {
+      log("[webgl] " + gpu.renderer);
+      return;
+    }
+    log("[webgl] este navegador no entrega WebGL"
+      + (gpu.reason ? " (" + gpu.reason + ")" : ""), true);
+    log("[webgl] pasa sobre todo en los navegadores integrados de WhatsApp / "
+      + "Telegram / Instagram y con la aceleración por hardware desactivada: "
+      + "abre el enlace en Chrome o Firefox.", true);
   }
 
   function loadScript(src) {
