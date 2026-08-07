@@ -1,26 +1,19 @@
 # Link Battle MMO
 
-> **Disclaimer:** this is a non-commercial **proof of concept built for fun
-> and for educational purposes**, **not affiliated with Nintendo, The Pokémon
-> Company, Game Freak, or Creatures Inc.** "Pokémon" and the creature names are
-> trademarks of their respective owners. It is not monetized in any way and is
-> intended to be transformative and educational, not a substitute for any
-> official product. No ROMs, sprites, or any original assets are distributed
-> here: each player supplies their own ROM, which never leaves their browser.
-> GitHub is authorized to take this repository down immediately if Nintendo
-> requests it (see [`DISCLAIMER.md`](DISCLAIMER.md)).
+> **Disclaimer:** non-commercial proof of concept, built for fun and for
+> educational purposes. **Not affiliated with Nintendo, The Pokémon Company,
+> Game Freak, or Creatures Inc.** No ROMs, sprites, or original assets are
+> distributed here — each player supplies their own ROM, which never leaves
+> their browser. Full text in [`DISCLAIMER.md`](DISCLAIMER.md).
 
-Gen 1, in the browser, with your friends. You see each other on the map,
-you challenge each other by pressing **A** in front of another trainer, and you
+Gen 1, in the browser, with your friends. You see each other on the map, you
+challenge each other by pressing **A** in front of another trainer, and you
 battle using the game's original `LinkBattle` engine.
 
-There is no sign-up, no passwords, no accounts. Your public name is your
-trainer's name. **Your ROM and your save never leave your browser**: the server
-only relays positions and battle turns.
+No sign-up, no passwords, no accounts: your public name is your trainer's name.
+The server only relays positions and battle turns.
 
----
-
-## Play in one command
+## Play
 
 ```bash
 git clone git@github.com:IagoLast/mmo.git
@@ -28,201 +21,79 @@ cd mmo
 make play
 ```
 
-That's it. `make play` does everything:
-
-1. Installs what's missing (`cloudflared`, `rgbds`, npm deps) via Homebrew.
-2. Builds the ROM from [`pret/pokered`](https://github.com/pret/pokered) (it's
-   not in the repo — it's a copyrighted cart, so the `.gitignore` blocks it).
-3. Builds the WebAssembly client **with the 3D voxel mode**.
-4. Starts the coordinator server.
-5. Opens a public `trycloudflare.com` tunnel and prints a link:
-
-```
-  ┌──────────────────────────────────────────────────────────────────
-  │  Partida lista
-  │
-  │  Comparte este enlace (pagina + ROM + servidor, todo en uno):
-  │  https://xxxx.trycloudflare.com/?server=wss://xxxx.trycloudflare.com/ws
-  │
-  │  Ctrl-C cierra la partida para todos.
-  └──────────────────────────────────────────────────────────────────
-```
-
-Share that link. Whoever opens it loads the page, the ROM, and the server
-connection in one go — no file picker, no setup on their side. **Ctrl-C**
+`make play` installs what's missing, builds the ROM and the WebAssembly client,
+starts the server, and prints a public `trycloudflare.com` link. Share it —
+whoever opens it gets the page, the ROM, and the server in one go. **Ctrl-C**
 closes the game for everyone.
 
-### Variants
+⚠️ That link serves the ROM to anyone who reaches it, so it's for a private
+session with friends — don't leave it up unattended. For the copyright-safe
+setup (every player brings their own ROM), see [Hosting](#hosting) below.
+
+**You need** macOS with **Node.js ≥ 22**; `cloudflared` and `rgbds` are
+installed via `brew` on first run. Linux works if you install `cloudflared`,
+`rgbds`, `node ≥ 22`, `python3`, and `zip` yourself.
 
 ```bash
-make play-local    # same, but only on your LAN — no public tunnel
-make rebuild        # rebuild the web client (e.g. after changing the mod)
+make play-local   # LAN only, no public tunnel
+make rebuild      # rebuild the web client
 ```
-
-### Requirements
-
-`make play` auto-installs `cloudflared` and `rgbds` via `brew` if they're
-missing, and `npm install` for both `backend/` and `web/`. You need:
-
-- **macOS** (the bootstrap uses `brew` and `ipconfig`). Linux works too if you
-  install `cloudflared`, `rgbds`, `node ≥ 22`, `python3`, and `zip` yourself.
-- **Node.js ≥ 22** — `brew install node`.
-
-> ⚠️ **The tunnel serves the ROM to anyone who reaches it.** `make play` is for
-> a private session with friends: the `trycloudflare.com` URL is public while
-> the tunnel is up, so don't leave it open unattended. For the copyright-safe
-> model (each player brings their own ROM, none is served), see
-> [GitHub Pages](#publish-the-client-on-github-pages) below.
-
----
 
 ## The ROM
 
-Each player brings their own and keeps it in their browser. None is
-distributed here: this repository contains the source code of
-[`pret/pokered`](https://github.com/pret/pokered), with which you can build
-your own:
+Not distributed here. This repo ships the [`pret/pokered`](https://github.com/pret/pokered)
+disassembly, and `make play` builds the cart from it on first run
+(`make -C pokered red`). `.gitignore` blocks `*.gb`, `*.gbc`, `*.sav`, and
+extracted data; the client build and the Pages workflow both abort if any of it
+reaches the bundle.
 
-```bash
-brew install rgbds     # macOS
-make -C pokered red    # leaves pokered/pokered.gbc
-```
+## Hosting
 
-`make play` does this for you on first run. The `.gitignore` blocks `*.gb`,
-`*.gbc`, `*.sav`, and extracted data; the client build aborts if it detects any
-of them in the bundle, and the Pages workflow checks again before publishing.
+For something permanent, publish the client and run the server separately — the
+page serves no ROM, so each player loads their own.
 
----
+- **Client:** fork, then **Settings → Pages → Source: GitHub Actions**. Lands at
+  `https://YOUR-USERNAME.github.io/pokemon-mmo/`. It's a plain static folder
+  (`web/dist/`) with no COOP/COEP requirement, so Netlify, S3, or
+  `python -m http.server` work the same.
+- **Server:** `docker build -t pokemon-mmo-server backend && docker run --rm -p 8080:8080 pokemon-mmo-server`.
+  One port, `GET /health` plus the game WebSocket on `/ws`. Any PaaS that
+  injects `PORT` runs it as-is.
+- **Both at once:** `scripts/host-game.sh` starts the server in Docker, opens a
+  tunnel, and prints the ready-made Pages link (`--local` skips the tunnel).
 
-## Publish the client on GitHub Pages
-
-`make play` runs the client from your laptop. For a permanent, copyright-safe
-setup (no ROM served, players supply their own), publish the client on GitHub
-Pages and point it at a server you run separately.
-
-Fork this repository and under **Settings → Pages** choose
-`Source: GitHub Actions`. On the next push, your client lives at:
-
-```
-https://YOUR-USERNAME.github.io/pokemon-mmo/
-```
-
-You can also trigger it manually from **Actions → Publish web client → Run
-workflow**. It takes a few minutes: it's the entire engine compiled to
-WebAssembly.
-
-Then run only the server and hand out a link:
-
-```bash
-scripts/host-game.sh
-```
-
-It starts the server in Docker, opens a public tunnel, and prints:
-
-```
-  https://your-username.github.io/pokemon-mmo/?server=wss://something.trycloudflare.com/ws
-```
-
-Here the page is on Pages and the ROM is **not** served — each player loads
-their own from their browser. You need [Docker](https://docs.docker.com/get-docker/)
-and `brew install cloudflared`. To play only on your local network,
-`scripts/host-game.sh --local` skips the tunnel.
-
----
-
-## Other ways to serve it
-
-The client is a static folder (`web/dist/`) that needs no special headers:
-the default build doesn't use `SharedArrayBuffer`, so no COOP/COEP is needed
-and it works the same on Pages, Netlify, Cloudflare Pages, S3, or a
-`python -m http.server`.
-
-The server is a single-port container:
-
-```bash
-docker build -t pokemon-mmo-server backend
-docker run --rm -p 8080:8080 pokemon-mmo-server
-```
-
-It serves `GET /health` and the game WebSocket on `/ws`. Any PaaS that injects
-`PORT` (Render, Railway, Fly, Cloud Run) runs it with no extra config. Behind
-TLS, the URL for players is `wss://your-server/ws`.
-
-If your server is permanent, bake it into the build and hand out a clean URL
-with no `?server=`:
-
-```bash
-web/build-web.sh --server wss://your-server/ws
-```
-
-**Client preference order:** `?server=` from the link → value baked into the
-build → whatever the player types by hand.
-
----
+Players reach a server via `?server=wss://your-server/ws` in the URL. Bake in a
+default with `web/build-web.sh --server wss://your-server/ws`; the client
+prefers `?server=` → baked-in value → whatever the player types.
 
 ## Development
 
-### Setup
-
 ```bash
-make setup                                # builds the ROM and prepares everything
-./scripts/setup-mvp.sh "/path/to/your/Red.gb"  # or start from your own ROM
-```
-
-### Two desktop clients
-
-```bash
-./scripts/run-server.sh        # terminal 1
-./scripts/run-client.sh red     # terminal 2
-./scripts/run-client.sh blue    # terminal 3
-```
-
-Each identity keeps its own save. Give them different names. When two
-identities are on the same map they appear as walkable NPCs: stand in front of
-one and press **A**.
-
-### Local web client
-
-```bash
-./scripts/run-server.sh   # terminal 1
-./web/build-web.sh        # terminal 2
-./web/serve.py            # then open http://127.0.0.1:8080
-```
-
-Details in [`web/README.md`](web/README.md).
-
-### Ports
-
-| | |
-|---|---|
-| Desktop (TCP) | `127.0.0.1:7778` |
-| Health HTTP | `http://127.0.0.1:3000/health` |
-| WebSocket (dev) | `ws://127.0.0.1:7779` (own port, via `WS_PORT`) |
-| WebSocket (prod) | `/ws` over the HTTP port |
-
-The coordinator and protocol are shared between TCP and WebSocket. In
-development the WebSocket also opens its own port because `web/serve.py` acts
-as a proxy to it; without `WS_PORT` defined only `/ws` remains, which is the
-only thing a PaaS or a tunnel can reach.
-
-### Tests
-
-```bash
+make setup                    # build the ROM and prepare everything
+./scripts/run-server.sh       # terminal 1
+./scripts/run-client.sh red   # terminal 2  (one identity = one save)
+./scripts/run-client.sh blue  # terminal 3
 make test
 ```
 
----
+Two identities on the same map appear as walkable NPCs: stand in front of one
+and press **A**. For the web client, `./web/build-web.sh` then `./web/serve.py`
+(<http://127.0.0.1:8080>) — details in [`web/README.md`](web/README.md).
+
+Ports: desktop TCP `7778`, health `3000`, dev WebSocket `7779` (`WS_PORT`),
+production WebSocket `/ws` on the HTTP port. The coordinator and protocol are
+shared between the two transports.
 
 ## What's inside
 
 | | |
 |---|---|
-| `gen1recomp/` | the engine, reimplemented in LÖVE ([bryanthaboi/gen1recomp](https://github.com/bryanthaboi/gen1recomp)), with the MMO layer in `src/mmo/` |
-| `DramaticShapeVoxelMod/` | the 3D voxel mode ([DramaticShape](https://github.com/DramaticShape/DramaticShapeVoxelMod)), with browser-compatibility patches |
-| `pokered/` | the Pokémon Red disassembly ([pret/pokered](https://github.com/pret/pokered)), for building the ROM |
-| `backend/` | the game coordinator (NestJS): positions, challenges, and battle relay |
-| `web/` | the WebAssembly client packaging and the bootstrap page |
-| `Makefile` / `scripts/` | the `make play` entry point and the launch tooling |
+| `gen1recomp/` | the engine in LÖVE ([bryanthaboi/gen1recomp](https://github.com/bryanthaboi/gen1recomp)), with the MMO layer in `src/mmo/` |
+| `DramaticShapeVoxelMod/` | the 3D voxel mode ([DramaticShape](https://github.com/DramaticShape/DramaticShapeVoxelMod)), with browser fixes |
+| `pokered/` | the Pokémon Red disassembly ([pret/pokered](https://github.com/pret/pokered)) |
+| `backend/` | the coordinator (NestJS): positions, challenges, battle relay |
+| `web/` | WebAssembly client packaging and the bootstrap page |
+| `Makefile` / `scripts/` | the `make play` entry point and launch tooling |
 
-The first three are copies with our own changes, not submodules: the MMO layer
-and the browser fixes live inside them. Each keeps its original license.
+The first three are copies with our own changes, not submodules. Each keeps its
+original license.
